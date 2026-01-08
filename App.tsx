@@ -1,117 +1,146 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, {useEffect, useRef, useState, useCallback} from 'react';
 import {
   SafeAreaView,
-  ScrollView,
-  StatusBar,
   StyleSheet,
-  Text,
-  useColorScheme,
+  BackHandler,
+  ToastAndroid,
+  Modal,
   View,
+  TouchableOpacity,
+  Text,
 } from 'react-native';
+import {WebView} from 'react-native-webview';
+import {WebViewMessageEvent} from 'react-native-webview';
+import BarcodeScan from './src/components/BarcodeScan';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
-
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
-
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+const INDEX_URL = 'http://61.41.64.30:8080/hyapp/index';
+const HOME_URL = 'http://61.41.64.30:8080/hyapp/main';
 
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const webviewRef = useRef<WebView>(null);
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
+
+  const exitTimer = useRef<number | null>(null);
+
+  /** 📌 WebView → RN 메시지 처리 */
+  const handleWebMessage = (event: WebViewMessageEvent) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+
+      if (data.type === 'requestBarcodeScan') {
+        setBarcodeScannerVisible(true);
+      }
+    } catch (e) {
+      console.log('메시지 파싱 오류:', e);
+    }
   };
 
+  /** 📌 바코드 스캔 완료 → 웹으로 전달 */
+  const handleBarcodeScanned = (barcodeValue: string) => {
+    webviewRef.current?.postMessage(
+      JSON.stringify({
+        type: 'barcode',
+        value: barcodeValue,
+      }),
+    );
+    setBarcodeScannerVisible(false);
+  };
+
+  /** 📌 Android 뒤로가기 처리 */
+  const handleBackPress = useCallback(() => {
+    if (barcodeScannerVisible) {
+      setBarcodeScannerVisible(false);
+      return true;
+    }
+
+    if (canGoBack && webviewRef.current) {
+      webviewRef.current.goBack();
+      return true;
+    }
+
+    if (exitTimer.current) {
+      BackHandler.exitApp();
+      return true;
+    }
+
+    ToastAndroid.show('한 번 더 누르면 앱이 종료됩니다.', ToastAndroid.SHORT);
+
+    exitTimer.current = setTimeout(() => {
+      exitTimer.current = null;
+    }, 2000) as unknown as number;
+
+    return true;
+  }, [barcodeScannerVisible, canGoBack]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleBackPress,
+    );
+    return () => subscription.remove();
+  }, [handleBackPress]);
+
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <SafeAreaView style={styles.container}>
+      {/* 🌐 WebView */}
+      <WebView
+        ref={webviewRef}
+        source={{uri: INDEX_URL}}
+        style={{flex: 1}}
+        onNavigationStateChange={nav => setCanGoBack(nav.canGoBack)}
+        onMessage={handleWebMessage}
+        javaScriptEnabled
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+
+      {/* 🏠 하단 홈 버튼 */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={styles.homeButton}
+          onPress={() => {
+            webviewRef.current?.injectJavaScript(`
+              window.location.href = '${HOME_URL}';
+              true;
+            `);
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+          <Text style={styles.homeText}>홈</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 📷 바코드 스캔 */}
+      <Modal visible={barcodeScannerVisible} animationType="slide">
+        <BarcodeScan
+          onScanned={handleBarcodeScanned}
+          onClose={() => setBarcodeScannerVisible(false)}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  bottomBar: {
+    height: 56,
+    borderTopWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
+  homeButton: {
+    paddingHorizontal: 40,
+    paddingVertical: 10,
+    backgroundColor: '#007bff',
+    borderRadius: 20,
   },
-  highlight: {
-    fontWeight: '700',
+  homeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
