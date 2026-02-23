@@ -8,20 +8,16 @@ import {
   View,
   TouchableOpacity,
   Text,
-  Platform,
-  Alert,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
-import {WebViewMessageEvent, WebViewNavigation} from 'react-native-webview';
+import {WebViewMessageEvent} from 'react-native-webview';
 import BarcodeScan from './src/components/BarcodeScan';
+import {Alert} from 'react-native';
 
-const INDEX_URL = 'http://192.168.211.230:8080/hyapp/index';
-const HOME_URL = 'http://192.168.211.230:8080/hyapp/main';
-
-//const INDEX_URL = 'http://61.41.64.2:8080/hyapp/index';
-//const HOME_URL = 'http://61.41.64.2:8080/hyapp/main';
-//const INDEX_URL = 'http://tmsdev.eugenesonic.co.kr/hyapp/index';
-//const HOME_URL = 'http://tmsdev.eugenesonic.co.kr/hyapp/main';
+//const INDEX_URL = 'http://61.41.64.30:8080/hyapp/index';
+//const HOME_URL = 'http://61.41.64.30:8080/hyapp/main';
+const INDEX_URL = 'http://tmsdev.eugenesonic.co.kr/hyapp/index';
+const HOME_URL = 'http://tmsdev.eugenesonic.co.kr/hyapp/main';
 
 function App(): React.JSX.Element {
   const webviewRef = useRef<WebView>(null);
@@ -29,17 +25,13 @@ function App(): React.JSX.Element {
   const [canGoBack, setCanGoBack] = useState(false);
   const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
 
-  // 🔥 WebView 리마운트용 (히스토리 초기화)
-  const [webViewKey, setWebViewKey] = useState(0);
-  const [currentUrl, setCurrentUrl] = useState(INDEX_URL);
-
-  // 안드로이드 뒤로 2번 종료용
   const exitTimer = useRef<number | null>(null);
 
-  /** 📌 WebView → RN 메시지 */
+  /** 📌 WebView → RN 메시지 처리 */
   const handleWebMessage = (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+
       if (data.type === 'requestBarcodeScan') {
         setBarcodeScannerVisible(true);
       }
@@ -48,37 +40,28 @@ function App(): React.JSX.Element {
     }
   };
 
-  /** 📌 바코드 스캔 완료 */
+  /** 📌 바코드 스캔 완료 → 웹으로 전달 */
   const handleBarcodeScanned = (barcodeValue: string) => {
     webviewRef.current?.postMessage(
-      JSON.stringify({type: 'barcode', value: barcodeValue}),
+      JSON.stringify({
+        type: 'barcode',
+        value: barcodeValue,
+      }),
     );
     setBarcodeScannerVisible(false);
   };
 
-  /** 🏠 홈 이동 + 히스토리 전체 삭제 */
-  const goHomeAndClearHistory = useCallback(() => {
-    setCanGoBack(false);
-    setCurrentUrl(HOME_URL);
-    setWebViewKey(k => k + 1); // 🔥 히스토리 초기화
-  }, []);
-
-  /** 📌 Android 물리 뒤로 버튼 */
+  /** 📌 Android 뒤로가기 처리 */
   const handleBackPress = useCallback(() => {
-    // 1) 스캔 모달 닫기
     if (barcodeScannerVisible) {
       setBarcodeScannerVisible(false);
       return true;
     }
 
-    // 2) WebView 뒤로가기
     if (canGoBack && webviewRef.current) {
       webviewRef.current.goBack();
       return true;
     }
-
-    // 3) 메인 화면 → 2번 눌러 종료
-    if (Platform.OS !== 'android') return false;
 
     if (exitTimer.current) {
       BackHandler.exitApp();
@@ -86,6 +69,7 @@ function App(): React.JSX.Element {
     }
 
     ToastAndroid.show('한 번 더 누르면 앱이 종료됩니다.', ToastAndroid.SHORT);
+
     exitTimer.current = setTimeout(() => {
       exitTimer.current = null;
     }, 2000) as unknown as number;
@@ -94,37 +78,36 @@ function App(): React.JSX.Element {
   }, [barcodeScannerVisible, canGoBack]);
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const sub = BackHandler.addEventListener(
+    const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       handleBackPress,
     );
-    return () => sub.remove();
+    return () => subscription.remove();
   }, [handleBackPress]);
 
   return (
     <SafeAreaView style={styles.container}>
       {/* 🌐 WebView */}
       <WebView
-        key={webViewKey}
         ref={webviewRef}
-        source={{uri: currentUrl}}
+        source={{uri: INDEX_URL}}
         style={{flex: 1}}
-        onNavigationStateChange={(nav: WebViewNavigation) =>
-          setCanGoBack(!!nav.canGoBack)
-        }
+        onNavigationStateChange={nav => setCanGoBack(nav.canGoBack)}
         onMessage={handleWebMessage}
         javaScriptEnabled
-        domStorageEnabled
       />
 
-      {/* 🏠 하단 홈 버튼 (잘림 방지) */}
-      <View style={styles.bottomArea}>
+      {/* 🏠 하단 홈 버튼 */}
+      <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.homeButton}
-          activeOpacity={0.85}
-          onPress={goHomeAndClearHistory}>
-          <Text style={styles.homeText}>⌂ 홈</Text>
+          onPress={() => {
+            webviewRef.current?.injectJavaScript(`
+              window.location.href = '${HOME_URL}';
+              true;
+            `);
+          }}>
+          <Text style={styles.homeText}>홈</Text>
         </TouchableOpacity>
       </View>
 
@@ -133,15 +116,21 @@ function App(): React.JSX.Element {
         visible={barcodeScannerVisible}
         animationType="slide"
         onRequestClose={() => {
+          // 🔥 Android 뒤로가기 버튼 처리
           Alert.alert(
             '스캔 취소',
             '스캔을 취소하시겠습니까?',
             [
-              {text: '아니오', style: 'cancel'},
+              {
+                text: '아니오',
+                style: 'cancel',
+              },
               {
                 text: '예',
                 style: 'destructive',
-                onPress: () => setBarcodeScannerVisible(false),
+                onPress: () => {
+                  setBarcodeScannerVisible(false);
+                },
               },
             ],
             {cancelable: true},
@@ -157,40 +146,27 @@ function App(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff'},
-
-  /** ✅ SafeArea 포함 하단 영역 */
-  bottomArea: {
-    paddingHorizontal: 16,
-    paddingTop: 5,
-    paddingBottom: 2, // 🔥 하단 잘림 방지 핵심
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
+  container: {
+    flex: 1,
   },
-
-  /** ✅ 홈 버튼 */
-  homeButton: {
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#111827',
-    alignItems: 'center',
+  bottomBar: {
+    height: 56,
+    borderTopWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
     justifyContent: 'center',
-
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: {width: 0, height: 2},
-
-    // Android shadow
-    elevation: 2,
+    alignItems: 'center',
+  },
+  homeButton: {
+    paddingHorizontal: 40,
+    paddingVertical: 10,
+    backgroundColor: '#007bff',
+    borderRadius: 20,
   },
   homeText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

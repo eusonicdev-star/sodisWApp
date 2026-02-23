@@ -1598,6 +1598,27 @@ PODS:
     - React-logger (= 0.75.4)
     - React-perflogger (= 0.75.4)
     - React-utils (= 0.75.4)
+  - ReactNativeCameraKit (17.0.1):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.01.01.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - RNFS (2.20.0):
     - React-Core
   - RNMLKitTextRecognition (2.0.0):
@@ -1704,6 +1725,7 @@ DEPENDENCIES:
   - React-utils (from `../node_modules/react-native/ReactCommon/react/utils`)
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
+  - ReactNativeCameraKit (from `../node_modules/react-native-camera-kit`)
   - RNFS (from `../node_modules/react-native-fs`)
   - "RNMLKitTextRecognition (from `../node_modules/@react-native-ml-kit/text-recognition`)"
   - RNScreens (from `../node_modules/react-native-screens`)
@@ -1858,6 +1880,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios
   ReactCommon:
     :path: "../node_modules/react-native/ReactCommon"
+  ReactNativeCameraKit:
+    :path: "../node_modules/react-native-camera-kit"
   RNFS:
     :path: "../node_modules/react-native-fs"
   RNMLKitTextRecognition:
@@ -1949,6 +1973,7 @@ SPEC CHECKSUMS:
   React-utils: 02526ea15628a768b8db9517b6017a1785c734d2
   ReactCodegen: 8b5341ecb61898b8bd40a73ebc443c6bf2d14423
   ReactCommon: 36d48f542b4010786d6b2bcee615fe5f906b7105
+  ReactNativeCameraKit: 5853558e91b8286b091c9f774419fa47d39b4115
   RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
   RNMLKitTextRecognition: 2d7c3481b9dabc72f7e31c67025c28b2c8d653b0
   RNScreens: 631b8768411a16e356f7934058d2139d0cc75157
